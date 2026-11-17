@@ -130,6 +130,14 @@ ol.tl li.k-info .dot{border-color:var(--muted);border-style:dashed}
 ol.tl li.done .dot{background:var(--good);border-color:var(--good)}
 ol.tl li.late .dot{border-color:var(--bad);background:var(--bad)}
 .late-msg{color:var(--bad)}
+.pill.ip{color:var(--accent);background:var(--accent-soft)}
+.seg3{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:2px;background:var(--bg)}
+.seg3 button{font:600 12px var(--f-body);border:0;background:transparent;color:var(--muted);padding:4px 10px;border-radius:999px;cursor:pointer;white-space:nowrap}
+.seg3 button[aria-pressed="true"][data-v="1"]{background:var(--accent);color:var(--surface)}
+.seg3 button[aria-pressed="true"][data-v="2"]{background:var(--good);color:var(--surface)}
+.seg3 button[aria-pressed="true"][data-v="0"]{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+ol.tl li.prog.prog:not(.late):not(.done) .dot{border-color:var(--accent);background:linear-gradient(90deg,var(--accent) 50%,var(--surface) 50%)}
+
 .next{display:grid;gap:4px;border-left:4px solid var(--accent);background:var(--accent-soft);border-radius:8px;padding:12px 16px}
 .next .label{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .next .art{background:var(--surface)}
@@ -419,6 +427,7 @@ footer a{color:var(--accent)}
     level: store.get("level","m"),
     rows: store.get("rows", TOKEN ? [] : EXAMPLE.map(r=>({...r}))),
     checks: store.get("checks", {}),
+    prog: store.get("prog", {}),
     start: store.get("start",(()=>{ const d=new Date(); d.setMonth(d.getMonth()-8); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); })())
   };
   const $ = s=>document.querySelector(s);
@@ -451,7 +460,7 @@ footer a{color:var(--accent)}
     const ticks=[]; for(let m=6;m<L.max;m+=6) ticks.push({at:m, t:`Matrícula de vínculo do ${m/6+1}º semestre`, d:"Obrigatória mesmo sem disciplinas.", a:"Art. 11 §7", kind:"tick"});
     const base = lv==="m" ? [
       {at:0, t:"Primeira matrícula", d:"Começa a contar o prazo do curso. O orientador já vem definido da seleção.", a:"Art. 36, 42", kind:"start"},
-      {at:6, due:24, t:"Estágio de Docência", d:"Liberado a partir do 2º semestre. É obrigatório por ao menos um semestre e exigido para a defesa.", a:"Art. 20, 44 §5", kind:"check", k:"d-estagio", done:"Estágio concluído",
+      {at:6, due:24, t:"Estágio Docência", d:"Liberado a partir do 2º semestre. É obrigatório por ao menos um semestre e exigido para a defesa.", a:"Art. 20, 44 §5", kind:"check", k:"d-estagio", done:"Estágio concluído",
         late:'Sem o estágio, você não pode defender <span class="art">Art. 44 §5</span>.'},
       {at:12, t:`Créditos para o projeto (${projNeed} de ${L.discCred})`, d:"Pelo menos 50% dos créditos em disciplinas para marcar a apresentação do projeto.", a:"Art. 30 §4", kind:"auto", ok:c.cred>=projNeed, info:`calculadora: ${c.cred} créditos`,
         late:'Sem esses créditos, você não pode apresentar o projeto <span class="art">Art. 30 §4</span>.'},
@@ -471,7 +480,7 @@ footer a{color:var(--accent)}
       {at:30, t:"Artigo A4 ou superior submetido", d:"Como primeiro autor, com relação comprovada com a pesquisa.", a:"Art. 32 §3", kind:"check", k:"q-artigo", done:"Artigo submetido ou publicado"},
       {at:30, t:"Exame de qualificação aprovado", d:"Antes do fim do 5º semestre. Conceito C permite repetir uma vez em até 6 meses.", a:"Art. 31, 33", kind:"check", k:"d-qual", done:"Qualificação aprovada",
         late:'A qualificação deveria ter ocorrido até o fim do 5º semestre <span class="art">Art. 31</span>. Reprovação (D) desliga do programa <span class="art">Art. 33 §3</span>.'},
-      {at:36, t:"Estágio de Docência", d:"Precisa ser feito até o 3º ano e não pode ser reaproveitado do mestrado.", a:"Art. 20 §3", kind:"check", k:"d-estagio", done:"Estágio concluído",
+      {at:36, t:"Estágio Docência", d:"Precisa ser feito até o 3º ano e não pode ser reaproveitado do mestrado.", a:"Art. 20 §3", kind:"check", k:"d-estagio", done:"Estágio concluído",
         late:'O estágio deveria ter sido feito até o 3º ano <span class="art">Art. 20 §3</span>. Sem ele, você não pode defender <span class="art">Art. 45 §5</span>.'},
       {at:48, t:"Créditos e RA para a defesa", d:`Mínimo de ${L.defendCred} créditos e RA igual ou maior que 3,0.`, a:"Art. 45 §1", kind:"auto", ok:c.cred>=L.defendCred&&raOk, info:`calculadora: ${c.cred} créditos · RA ${c.ra===null?"–":c.ra.toFixed(2).replace(".",",")}`},
       {at:48, t:"Artigo A4 ou superior aceito", d:"Em periódico, como primeiro autor, com relação comprovada com a pesquisa.", a:"Art. 45 §3", kind:"check", k:"d-artigo", done:"Artigo aceito"},
@@ -482,12 +491,23 @@ footer a{color:var(--accent)}
     return base.concat(ticks).sort((x,y)=>x.at-y.at || (x.kind==="tick"?-1:y.kind==="tick"?1:0));
   }
 
+  function seg3(key, id){
+    const v = state.checks[key] ? 2 : state.prog[key] ? 1 : 0;
+    const b=(n,label)=>`<button type="button" id="${id}-${n}" data-k="${key}" data-v="${n}" aria-pressed="${v===n}">${label}</button>`;
+    return `<div class="seg3" role="group" aria-label="Situação">${b(0,"Não iniciado")}${b(1,"Em andamento")}${b(2,"Concluído")}</div>`;
+  }
   function statusOf(m, el, lv){
     const done = m.kind==="check" ? !!state.checks[lv+":"+m.k] : m.kind==="auto" ? m.ok : null;
+    const prog = m.kind==="check" && !!state.prog[lv+":"+m.k];
     if(done===null) return null;
     if(done) return {cls:"ok", txt:"cumprido", done:true};
-    if(el===null) return {cls:"nt", txt:"pendente"};
+    if(el===null) return prog?{cls:"ip", txt:"em andamento", prog}:{cls:"nt", txt:"pendente"};
     const left=(m.due!=null?m.due:m.at)-el;
+    if(prog){
+      if(left<0) return {cls:"no", txt:`em andamento · atrasado há ${-left} ${-left===1?"mês":"meses"}`, late:true, prog};
+      if(left<=3) return {cls:"wn", txt:`em andamento · vence em ${left} ${left===1?"mês":"meses"}`, prog};
+      return {cls:"ip", txt:"em andamento", prog};
+    }
     if(left<0) return {cls:"no", txt:`atrasado há ${-left} ${-left===1?"mês":"meses"}`, late:true};
     if(left<=3) return {cls:"wn", txt:left===0?"vence este mês":`vence em ${left} ${left===1?"mês":"meses"}`};
     return {cls:"nt", txt:"no prazo"};
@@ -504,7 +524,7 @@ footer a{color:var(--accent)}
     ms.forEach(m=>{
       if(today && !placed && raw<m.at){ html+=todayItem(); placed=true; }
       const st=statusOf(m,el,lv), past=today&&raw>=m.at;
-      const cls=["k-"+m.kind, past?"past":"", st&&st.done?"done":"", st&&st.late?"late":""].join(" ");
+      const cls=["k-"+m.kind, past?"past":"", st&&st.done?"done":"", st&&st.late?"late":"", st&&st.prog?"prog":""].join(" ");
       if(m.kind==="tick"){
         html+=`<li class="${cls}"><div class="when">${fmt(add(s,m.at))}<small>mês ${m.at}</small></div><div class="rail"><span class="dot"></span></div><div class="body"><p class="small"><b>${m.t}.</b> <span class="muted">${m.d}</span> <span class="art">${m.a}</span></p></div></li>`;
         return;
@@ -512,7 +532,7 @@ footer a{color:var(--accent)}
       const key=lv+":"+m.k;
       const pill = st ? `<span class="pill ${st.cls}">${st.txt}</span>` : "";
       const dueTxt = m.due!=null ? `<span class="auto">prazo: ${fmt(add(s,m.due))}</span>` : "";
-      const ctl = m.kind==="check" ? `<label class="tl-chk" for="tl-${lv}-${m.k}"><input type="checkbox" id="tl-${lv}-${m.k}" data-k="${key}"${state.checks[key]?" checked":""}>${m.done}</label>`
+      const ctl = m.kind==="check" ? seg3(key, `tl-${lv}-${m.k}`)
                 : m.kind==="auto" ? `<span class="auto">${m.info}</span>` : "";
       html+=`<li class="${cls}"><div class="when">${fmt(add(s,m.at))}<small>mês ${m.at}</small></div><div class="rail"><span class="dot"></span></div><div class="body">
         <div class="tl-head"><h3>${m.t}</h3>${pill}</div>
@@ -535,7 +555,7 @@ footer a{color:var(--accent)}
       const left=el===null?null:due-el;
       const timing = left===null ? "" : st.late ? ` <span class="pill no">${st.txt}</span>` : ` <span class="pill ${st.cls==="wn"?"wn":"nt"}">faltam ${left} ${left===1?"mês":"meses"}</span>`;
       nx.className="next"+(st.late?" late-box":"");
-      nx.innerHTML=`<span class="label">Próximo passo</span><p><b>${m.t}</b> até ${when}.${timing}</p><p class="small muted">${extra}</p>`;
+      nx.innerHTML=`<span class="label">Próximo passo</span><p><b>${m.t}</b> até ${when}.${timing}${st.prog?' <span class="pill ip">em andamento</span>':""}</p><p class="small muted">${extra}</p>`;
     }
 
     const span=L.max+L.ext, pct=Math.max(0,Math.min(100,(raw||0)/span*100)), maxPct=L.max/span*100;
@@ -593,13 +613,13 @@ footer a{color:var(--accent)}
         {t:"RA igual ou maior que 3,0", auto:`RA ${raTxt}`, ok:raOk},
         {t:"Projeto de dissertação aprovado (conceito A ou B)", k:"d-proj"},
         {t:"Artigo aceito em conferência ou periódico com revisão por pares, ou em revisão", k:"d-artigo"},
-        {t:"Estágio de Docência concluído", k:"d-estagio"}
+        {t:"Estágio Docência concluído", k:"d-estagio"}
       ] : [
         {t:`Mínimo de ${L.defendCred} créditos`, auto:`${c.cred} créditos`, ok:c.cred>=L.defendCred},
         {t:"RA igual ou maior que 3,0", auto:`RA ${raTxt}`, ok:raOk},
         {t:"Exame de qualificação aprovado (conceito A ou B)", k:"d-qual"},
         {t:"Artigo aceito em periódico A4 ou superior, como primeiro autor", k:"d-artigo"},
-        {t:"Estágio de Docência concluído", k:"d-estagio"}
+        {t:"Estágio Docência concluído", k:"d-estagio"}
       ]};
     [proj,def].forEach(card=>card.items.forEach(it=>{ if(it.k) it.ok=m(it.k) }));
     const cardHtml = card=>`<article class="check-card">
@@ -625,6 +645,8 @@ footer a{color:var(--accent)}
       d.late=pend.filter(x=>x.st.late).map(x=>({t:x.m.t, when:fmt(add(s0,x.due))}));
       d.soon=pend.filter(x=>!x.st.late&&x.st.cls==="wn").map(x=>({t:x.m.t, when:fmt(add(s0,x.due))}));
       d.done=st.filter(x=>x.st.done).map(x=>x.m.t);
+      d.prog=pend.filter(x=>x.st.prog&&!x.st.late).map(x=>({t:x.m.t, when:fmt(add(s0,x.due))}));
+      d.late.forEach((x,i)=>{ if(pend.filter(y=>y.st.late)[i].st.prog) x.t+=" (em andamento)"; });
       if(pend.length){ const n=pend[0]; d.next={t:n.m.t, when:fmt(add(s0,n.due)), late:!!n.st.late, left:el===null?null:n.due-el}; }
       else d.allDone=true;
     }
@@ -642,6 +664,7 @@ footer a{color:var(--accent)}
       out.push("");
       out.push(d.next?`Próximo passo: ${d.next.t} até ${d.next.when}${d.next.late?" (atrasado)":d.next.left!==null?` (faltam ${d.next.left} meses)`:""}`:"Próximo passo: todos os requisitos marcados como cumpridos");
       if(d.late.length){ out.push("","Atrasado:"); d.late.forEach(x=>out.push(`- ${x.t} (prazo ${x.when})`)); }
+      if(d.prog&&d.prog.length){ out.push("","Em andamento:"); d.prog.forEach(x=>out.push(`- ${x.t} (prazo ${x.when})`)); }
       if(d.soon.length){ out.push("","Vence em até 3 meses:"); d.soon.forEach(x=>out.push(`- ${x.t} (prazo ${x.when})`)); }
       if(d.done.length){ out.push("",`Já cumprido: ${d.done.join("; ")}`); }
     }
@@ -721,6 +744,7 @@ footer a{color:var(--accent)}
           lines.forEach((l,i)=>ctx.fillText(l,P+40,y+i*34)); y+=lines.length*34+10; });
         y+=22; };
       list("Atrasado", d.late.map(x=>`${x.t} (prazo ${x.when})`), RC.bad, "✕");
+      list("Em andamento", (d.prog||[]).map(x=>`${x.t} (prazo ${x.when})`), RC.accent, "•");
       list("Vence em até 3 meses", d.soon.map(x=>`${x.t} (prazo ${x.when})`), RC.warn, "!");
       list("Já cumprido", d.done, RC.good, "✓");
     }
@@ -797,7 +821,7 @@ footer a{color:var(--accent)}
       <div class="ra-calc"><span class="k">Como foi calculado</span><code>${parts.length?`(${parts.join(" + ")}) ÷ ${cr} = ${pts} ÷ ${cr} = ${raTxt}`:"sem disciplinas com conceito"}</code>
       <span class="small muted">Créditos obtidos: <b>${c.cred}</b> de ${L.totalCred} · ${L.defendCred} para defender. Conceitos I e T não entram no RA; disciplinas aproveitadas (O) contam como A ou B, conforme decidido na transferência <span class="art">Art. 27 §4</span>.</span></div>`;
   }
-  function save(){ store.set("rows",state.rows); store.set("checks",state.checks); store.set("level",state.level); store.set("start",$("#start").value); scheduleSync(); }
+  function save(){ store.set("rows",state.rows); store.set("checks",state.checks); store.set("prog",state.prog); store.set("level",state.level); store.set("start",$("#start").value); scheduleSync(); }
 
   document.querySelectorAll(".seg button").forEach(b=>b.addEventListener("click",()=>{ state.level=b.dataset.level; save(); renderAll(); }));
   $("#start").addEventListener("input",()=>{ save(); renderAll(); });
@@ -862,6 +886,12 @@ footer a{color:var(--accent)}
     try{ navigator.clipboard.writeText(txt).then(()=>{ msg.textContent="Relatório copiado. Cole no e-mail ou na mensagem para o orientador."; }, sel); }catch(e){ sel(); }
   });
 
+  $("#timeline").addEventListener("click",e=>{
+    const btn=e.target.closest(".seg3 button"); if(!btn) return;
+    const k=btn.dataset.k, v=+btn.dataset.v;
+    state.checks[k]=v===2; state.prog[k]=v===1; save(); renderAll();
+    const again=document.getElementById(btn.id); if(again) again.focus();
+  });
   // ---------- sincronização com a orientadora ----------
   let loaded=false, timer=null, sending=false, pending=false;
   function status(txt, cls){ const el=$("#sync-status"); el.textContent=txt; el.className="pill "+cls; }
@@ -880,7 +910,7 @@ footer a{color:var(--accent)}
     const c=calc();
     api({acao:"salvar", token:TOKEN, nivel:state.level, inicio:$("#start").value,
          ra: c.ra===null?"":c.ra.toFixed(2), creditos:c.cred, ds:c.ds,
-         dados:{rows:state.rows, checks:state.checks, level:state.level, start:$("#start").value}})
+         dados:{rows:state.rows, checks:state.checks, prog:state.prog, level:state.level, start:$("#start").value}})
       .then(r=>{ if(!r.ok) throw new Error(r.erro); status("salvo em "+hora(r.atualizado),"ok"); })
       .catch(err=>{ status("não foi enviado","no"); $("#sync").classList.add("err"); $("#sync-retry").hidden=false; $("#sync-sub").textContent = "Verifique sua internet e tente de novo. "+(err&&err.message?"("+err.message+")":""); })
       .finally(()=>{ sending=false; if(pending){ pending=false; send(); } });
@@ -899,6 +929,7 @@ footer a{color:var(--accent)}
       if(d){
         state.rows = Array.isArray(d.rows)? d.rows : [];
         state.checks = d.checks || {};
+        state.prog = d.prog || {};
         state.level = d.level==="d"?"d":"m";
         if(d.start) $("#start").value = d.start;
         status("salvo em "+hora(a.atualizado),"ok");
@@ -909,7 +940,7 @@ footer a{color:var(--accent)}
         $("#sync-sub").textContent = "Bem-vindo! Confira o mês da sua primeira matrícula e lance suas disciplinas. Tudo é enviado automaticamente para sua orientadora.";
       }
       loaded=true;
-      store.set("rows",state.rows); store.set("checks",state.checks); store.set("level",state.level); store.set("start",$("#start").value);
+      store.set("rows",state.rows); store.set("checks",state.checks); store.set("prog",state.prog); store.set("level",state.level); store.set("start",$("#start").value);
       renderRows(); renderAll();
       if(!d) send();
     }).catch(err=>{
